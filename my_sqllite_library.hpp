@@ -61,12 +61,12 @@ class My_sqlite_lib{
 
     protected:
                 //Definiamo la struttura per salvarci le informazioni per la tabella globale
-                TABLE_INFO* info_table;
+                static TABLE_INFO* info_table;
                 /*
                   mi serve per permettere alla funzione di callback di scrivere solo una volta
                   sul file temporaneo il nome delle colonne tel db
                 */
-                bool is_row_index_writed;
+                static bool is_row_index_writed;
 
     public:
             //indicare il percorso del file da analizzare
@@ -77,11 +77,11 @@ class My_sqlite_lib{
 
     private:
             //Compila la regex
-            static int compile_regex (regex_t *, const char *);
+            int compile_regex (regex_t *, const char *);
             //Stampa a terminale il risultato di una query
             void execute_query(sqlite3*, char*);
             //Utilizzata per interrogare il db
-            int callback(void *, int, char **, char **);
+            static int callback(void *, int, char **, char **);
             /*
               Utilizzata quando non ci si aspetta un valore di ritorno da una query,
               come una CREATE TABLE
@@ -106,7 +106,7 @@ class My_sqlite_lib{
               Funzione chiamata da quella che esegue la query che viene fatta nella funzione
               precedente, (utilizza TABLE_INFO)
             */
-            int make_table_callback(void*, int, char **, char **);
+            static int make_table_callback(void*, int, char **, char **);
             //Restituisce la grandezza del file che si trova nel percorso passatogli
             int get_file_size(char*);
             //Rimove (dal file corrsipondente al path passato) il range specificato
@@ -122,7 +122,6 @@ My_sqlite_lib::My_sqlite_lib(char* path){
 
   if (original_file == NULL){
     printf("Attenzione, il file indicato non esiste\n");
-    return -1;
   }
 
   //dopo aver'verificato che nel primo ci sia qualcosa apro il secondo
@@ -131,7 +130,7 @@ My_sqlite_lib::My_sqlite_lib(char* path){
 
   if (temp_file == NULL){
     printf("Errore nella creazione del file temporaneo\n");
-    return -1;
+    exit(EXIT_FAILURE);
   }
 
   while ((ch = fgetc(original_file)) != EOF)
@@ -162,7 +161,7 @@ char* My_sqlite_lib::build_page(){
   //Apertura del db e gestione eventuali errori
   if (sqlite3_open(db_name, &my_db)){
     printf("Impossibile accedere al database: %s\n", sqlite3_errmsg(my_db));
-    return -1;
+    exit(EXIT_FAILURE);
   }else
     printf("Database aperto con successo\n");
 
@@ -171,7 +170,7 @@ char* My_sqlite_lib::build_page(){
 
 
   //Avvio la funzioe che andrà a compilarmi la struttura
-  find_query(TMP_FILE_NAME);
+  find_query(strdup(TMP_FILE_NAME));
 
   make_table(my_db);
   sqlite3_free(error_message);
@@ -183,7 +182,7 @@ char* My_sqlite_lib::build_page(){
   Funzione che facilita la compilazione di una regex
   gestisce gli errori e ritorna un valore
 */
-static int My_sqlite_lib::compile_regex (regex_t * r, const char * regex_text){
+int My_sqlite_lib::compile_regex (regex_t * r, const char * regex_text){
 
     int status = regcomp(r, regex_text, REG_EXTENDED|REG_NEWLINE);
 
@@ -309,7 +308,7 @@ void My_sqlite_lib::find_query(char* file_path){
 
 void My_sqlite_lib::make_table(sqlite3* my_db){
 
-  char* error_message = 0;
+  char* error_message;
   char* query = strdup(info_table->query);
 
   //Creaiamo il file temporaneo per il buffer
@@ -336,7 +335,7 @@ void My_sqlite_lib::make_table(sqlite3* my_db){
 
     //Procedo adesso a leggere tutto ciò che ho scritto in un buffer
     FILE* to_read = fopen(MAKE_TABLE_TMP_FILE_NAME, "r");
-    int size_of_to_read_file = get_file_size(MAKE_TABLE_TMP_FILE_NAME);
+    int size_of_to_read_file = get_file_size(strdup(MAKE_TABLE_TMP_FILE_NAME));
     char buffer[size_of_to_read_file];
     fread(buffer, size_of_to_read_file, sizeof(char), to_read);
     fclose(to_read);
