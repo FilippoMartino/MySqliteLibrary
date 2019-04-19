@@ -31,6 +31,8 @@ using namespace std;
 #define FIND_TAG_DB_REGEX "<sql\\s*database=\\s*([^ ]*)\\s*\\/>"
 //regex che cerca una query nel rispettivo tag <sql/>
 #define FIND_TAG_QUERY_REGEX "<sql\\s*query=\\s*(.*;)\\s*\\/>"
+/*Controlla la presenza di tag sql*/
+#define CHECK_MORE_SQL_TAG "<sql(.*)\\/>"
 //definizione dei tag per scrivere la tabella html
 #define TAG_TABLE_START "<table border=\"1px solid\" align=\"center\">\n\t"
 #define TAG_TABLE_END "</table>\n"
@@ -111,6 +113,9 @@ class My_sqlite_lib{
             int get_file_size(char*);
             //Rimove (dal file corrsipondente al path passato) il range specificato
             void remove_range_from_file(char*, int, int);
+            /*Controlla la presenza di tag sql, mi serve per continuare a
+              creare tabelle finchè rimangono interrogazioni*/
+            bool more_tag();
 
 };
 
@@ -168,11 +173,13 @@ char* My_sqlite_lib::build_page(){
   int ret;
   char* error_message = 0;
 
+  /*Fino a che rimangono tag sql avvio il processo di ricerca, cancellazione
+    tag e aggiunta tabella all'interno del file*/
+  while (more_tag()){
+    find_query(strdup(TMP_FILE_NAME));
+    make_table(my_db);
+  }
 
-  //Avvio la funzioe che andrà a compilarmi la struttura
-  find_query(strdup(TMP_FILE_NAME));
-
-  make_table(my_db);
   sqlite3_free(error_message);
   sqlite3_close(my_db);
 
@@ -505,6 +512,30 @@ void My_sqlite_lib::remove_range_from_file(char* path, int start, int end){
   fclose(file);
 }
 
+bool My_sqlite_lib::more_tag(){
+
+  regex_t regex;
+  //procediamo alla compilazione della regex
+  compile_regex(&regex, strdup(CHECK_MORE_SQL_TAG));
+  int fs = get_file_size(strdup(info_table->file_path));
+  char file_content[fs];
+  FILE* file = fopen(strdup(info_table->file_path), "r");
+  fread(file_content, fs, sizeof(char), file);
+  fclose(file);
+
+  //numero dei matches che consentiamo di trovare
+  int n_matches = 10;
+  regmatch_t matches_array[n_matches];
+  //eseguiamo la regex
+  regexec(&regex, file_content, n_matches, matches_array, 0);
+
+  /*Controllo la presenza di un eventuale match e restituisco il valore opportuno*/
+  if (matches_array == NULL)
+    return false;
+  else
+    return true;
+
+}
 
 
 
